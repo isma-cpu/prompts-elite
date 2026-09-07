@@ -75,6 +75,7 @@
         ::-webkit-scrollbar-thumb:hover { background: #eab308; }
 
         #detailModal, #lightbox { backdrop-filter: blur(10px); }
+        #confirmModal { z-index: 700; backdrop-filter: blur(10px); }
 
         /* Accesibilidad */
         .sr-only {
@@ -169,6 +170,25 @@
         .detail-desc-input:focus { border-color: #eab308; outline: none; box-shadow: 0 0 12px rgba(234,179,8,.15); }
         .add-description-btn { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; background: transparent; border: none; padding: 0; cursor: pointer; }
         .add-description-btn:hover { color: #eab308; }
+        .note-detail-textarea { min-height: 220px; resize: vertical; line-height: 1.55; font-size: .9rem; overflow: hidden; }
+
+        /* Adjunto de media compacto para notas */
+        .note-media-attach { margin-top: .25rem; }
+        .note-media-attach-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; display: block; margin-bottom: .4rem; }
+        .note-media-dropzone {
+            width: 100%; min-height: 3.4rem; border: 1.5px dashed #2a2a2a; border-radius: .6rem; background: #101010;
+            display: flex; align-items: center; justify-content: center; gap: .5rem; cursor: pointer; transition: all .2s;
+            color: #6b7280; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: .5rem;
+        }
+        .note-media-dropzone:hover, .note-media-dropzone.dropzone-active { border-color: #eab308; color: #eab308; box-shadow: 0 0 12px rgba(234,179,8,.15); }
+        .note-media-preview { position: relative; width: 100%; max-width: 220px; border-radius: .6rem; overflow: hidden; border: 1px solid #242424; }
+        .note-media-preview img, .note-media-preview video { width: 100%; max-height: 140px; object-fit: cover; display: block; }
+        .note-media-preview-remove {
+            position: absolute; top: .35rem; right: .35rem; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+            background: rgba(0,0,0,.7); color: #f87171; border: 1px solid rgba(255,255,255,.15); font-size: .8rem;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; line-height: 1;
+        }
+        .note-media-preview-remove:hover { background: #dc2626; color: #fff; }
         .emoji-trigger {
             width: 2.9rem; height: 2.9rem; flex-shrink: 0; border-radius: .8rem; background: #111; border: 1px solid #2e2e2e;
             font-size: 1.45rem; display: flex; align-items: center; justify-content: center; transition: all .2s;
@@ -263,6 +283,20 @@
             position: absolute; top: .15rem; right: .15rem; width: 1rem; height: 1rem; border-radius: 50%;
             background: rgba(220,38,38,.9); color: #fff; font-size: .55rem; display: flex; align-items: center; justify-content: center; z-index: 2;
         }
+
+        /* Mover prompt a otro bloque */
+        .move-block-popover {
+            position: fixed; z-index: 600; background: #0a0a0a; border: 1px solid rgba(234,179,8,.45); border-radius: .9rem;
+            padding: .7rem; box-shadow: 0 20px 60px rgba(0,0,0,.9), 0 0 34px rgba(234,179,8,.18); max-width: 16rem; max-height: 16rem; overflow-y: auto;
+        }
+        .move-block-label { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a8a8a; display: block; margin-bottom: .5rem; }
+        .move-block-option {
+            display: flex; align-items: center; gap: .55rem; width: 100%; text-align: left; padding: .5rem .55rem; border-radius: .5rem;
+            background: transparent; border: 1px solid transparent; color: #d1d5db; font-size: .82rem; cursor: pointer; transition: all .15s;
+        }
+        .move-block-option:hover { background: #151515; border-color: #2a2a2a; }
+        .move-block-option .move-block-emoji { font-size: 1rem; }
+        .move-block-empty { font-size: .78rem; color: #6b7280; padding: .4rem .2rem; }
 
         /* Slots de imagen/vídeo antes-después */
         .media-slots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
@@ -382,6 +416,18 @@
         <div class="relative max-w-4xl max-h-[85vh]" role="dialog" aria-modal="true" aria-label="Vista ampliada de la imagen" id="lightboxContent">
             <button type="button" id="lightboxCloseBtn" class="absolute -top-4 -right-4 bg-red-600 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold shadow-lg" aria-label="Cerrar vista ampliada">✕</button>
             <img id="lightboxImg" src="" alt="Imagen ampliada" class="max-w-full max-h-[85vh] rounded-lg border border-[#333] object-contain">
+        </div>
+    </div>
+
+    <!-- DIÁLOGO DE CONFIRMACIÓN -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/85 hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300" aria-hidden="true">
+        <div id="confirmModalContent" class="elite-panel gold-shadow w-full max-w-sm rounded-2xl p-6 transform scale-95 transition-transform duration-300"
+             role="alertdialog" aria-modal="true" aria-labelledby="confirmModalMessage">
+            <p id="confirmModalMessage" class="text-sm text-gray-200 mb-6 leading-relaxed"></p>
+            <div class="flex justify-end gap-3">
+                <button type="button" id="confirmCancelBtn" class="btn-dark px-5 py-2.5 rounded-lg text-sm font-bold uppercase">Cancelar</button>
+                <button type="button" id="confirmOkBtn" class="btn-danger px-5 py-2.5 rounded-lg text-sm font-bold uppercase">Eliminar</button>
+            </div>
         </div>
     </div>
 
@@ -922,6 +968,18 @@
                 await this.persist(); this._emit();
             }
 
+            async movePromptToBlock(fromBlockId, promptId, toBlockId) {
+                if (fromBlockId === toBlockId) return;
+                const fromBlock = this.findBlock(fromBlockId);
+                const toBlock = this.findBlock(toBlockId);
+                if (!fromBlock || !toBlock) return;
+                const idx = fromBlock.prompts.findIndex(p => p.id === promptId);
+                if (idx === -1) return;
+                const [item] = fromBlock.prompts.splice(idx, 1);
+                toBlock.prompts.push(item);
+                await this.persist(); this._emit();
+            }
+
             async reorderPrompt(blockId, promptId, toIndex) {
                 const block = this.findBlock(blockId);
                 if (!block) return;
@@ -938,7 +996,7 @@
 
             async addNote() {
                 const id = uid();
-                this.notes.push({ id, title: '', emoji: '', description: '' });
+                this.notes.push({ id, title: '', emoji: '', description: '', mediaId: null, mediaType: null });
                 await this.persist(); this._emit();
                 return id;
             }
@@ -960,14 +1018,40 @@
             async setNoteDescription(noteId, description) {
                 const note = this.findNote(noteId);
                 if (!note) return;
-                note.description = Sanitizer.cleanText(description, 500);
+                note.description = Sanitizer.cleanText(description, 8000);
                 await this.persist();
+            }
+
+            async setNoteMedia(noteId, file) {
+                const note = this.findNote(noteId);
+                if (!note) return;
+                if (note.mediaId) { this.mediaUrlManager.revoke(note.mediaId); await this.db.deleteMedia(note.mediaId); }
+                const mediaId = uid();
+                await this.db.putMedia(mediaId, file, file.type);
+                note.mediaId = mediaId;
+                note.mediaType = file.type.startsWith('video') ? 'video' : 'image';
+                await this.persist(); this._emit();
+            }
+
+            async removeNoteMedia(noteId) {
+                const note = this.findNote(noteId);
+                if (!note) return;
+                if (!note.mediaId) return;
+                this.mediaUrlManager.revoke(note.mediaId);
+                await this.db.deleteMedia(note.mediaId);
+                note.mediaId = null; note.mediaType = null;
+                await this.persist(); this._emit();
+            }
+
+            async _releaseMediaForNote(note) {
+                if (note.mediaId) { this.mediaUrlManager.revoke(note.mediaId); await this.db.deleteMedia(note.mediaId); }
             }
 
             async deleteNote(noteId) {
                 const idx = this.notes.findIndex(n => n.id === noteId);
                 if (idx === -1) return;
-                this.notes.splice(idx, 1);
+                const [removed] = this.notes.splice(idx, 1);
+                await this._releaseMediaForNote(removed);
                 await this.persist(); this._emit();
             }
 
@@ -995,7 +1079,12 @@
                     }
                     blocksOut.push(b);
                 }
-                const notesOut = this.notes.map(n => ({ title: n.title || '', emoji: n.emoji || '', description: n.description || '' }));
+                const notesOut = [];
+                for (const note of this.notes) {
+                    let media = null;
+                    if (note.mediaId) { const rec = await this.db.getMedia(note.mediaId); if (rec) media = await blobToDataURL(rec.blob); }
+                    notesOut.push({ title: note.title || '', emoji: note.emoji || '', description: note.description || '', media, mediaType: note.mediaType || null });
+                }
                 return { blocks: blocksOut, notes: notesOut };
             }
 
@@ -1012,13 +1101,23 @@
                     throw new Error('Formato de acceso denegado.');
                 }
                 for (const block of this.blocks) await this._releaseMediaForBlock(block);
+                for (const note of this.notes) await this._releaseMediaForNote(note);
                 this.blocks = await convertLegacyBlocks(blocksArray, this.db);
-                this.notes = notesArray.map(n => ({
-                    id: uid(),
-                    title: Sanitizer.cleanText(n.title || '', 120),
-                    emoji: typeof n.emoji === 'string' ? n.emoji : '',
-                    description: Sanitizer.cleanText(n.description || '', 500)
-                }));
+                this.notes = [];
+                for (const n of notesArray) {
+                    const note = {
+                        id: uid(),
+                        title: Sanitizer.cleanText(n.title || '', 120),
+                        emoji: typeof n.emoji === 'string' ? n.emoji : '',
+                        description: Sanitizer.cleanText(n.description || '', 8000),
+                        mediaId: null, mediaType: null
+                    };
+                    if (n.media) {
+                        const r = await convertMediaDataUrl(n.media, this.db);
+                        if (r) { note.mediaId = r.id; note.mediaType = r.type; }
+                    }
+                    this.notes.push(note);
+                }
                 await this.persist(); this._emit();
             }
         }
@@ -1151,6 +1250,45 @@
                     this.overlay.classList.add('hidden');
                     this.overlay.setAttribute('aria-hidden', 'true');
                 }, 300);
+            }
+        }
+
+        /* =========================================================
+         * DIÁLOGO DE CONFIRMACIÓN (sustituye a window.confirm)
+         * ========================================================= */
+        class ConfirmDialog {
+            constructor(refs) {
+                this.overlay = refs.overlay; this.content = refs.content; this.message = refs.message;
+                this.cancelBtn = refs.cancelBtn; this.okBtn = refs.okBtn;
+                this.focusTrap = new FocusTrap(this.content);
+                this.focusTrap.onEscape = () => this._resolve(false);
+                this.cancelBtn.addEventListener('click', () => this._resolve(false));
+                this.okBtn.addEventListener('click', () => this._resolve(true));
+                this.overlay.addEventListener('click', (e) => { if (e.target === this.overlay) this._resolve(false); });
+                this._resolveFn = null;
+            }
+            ask(message, okLabel) {
+                this.message.textContent = message;
+                this.okBtn.textContent = okLabel || 'Eliminar';
+                this.overlay.classList.remove('hidden');
+                this.overlay.setAttribute('aria-hidden', 'false');
+                this.cancelBtn.focus();
+                requestAnimationFrame(() => {
+                    this.overlay.classList.remove('opacity-0');
+                    this.content.classList.remove('scale-95');
+                });
+                this.focusTrap.activate();
+                return new Promise((resolve) => { this._resolveFn = resolve; });
+            }
+            _resolve(value) {
+                this.overlay.classList.add('opacity-0');
+                this.content.classList.add('scale-95');
+                this.focusTrap.deactivate();
+                setTimeout(() => {
+                    this.overlay.classList.add('hidden');
+                    this.overlay.setAttribute('aria-hidden', 'true');
+                }, 300);
+                if (this._resolveFn) { const r = this._resolveFn; this._resolveFn = null; r(value); }
             }
         }
 
@@ -1300,7 +1438,7 @@
         /* =========================================================
          * CONSTRUCTORES DE FICHAS
          * ========================================================= */
-        const BLOCK_CARD_MAX_PROMPTS = 6;
+        const BLOCK_CARD_MAX_PROMPTS = 4;
 
         function createBlockCard(cfg) {
             const wrap = el('div', { class: 'tile-wrap', 'data-drag-type': 'block', 'data-drag-id': cfg.dragId, 'data-flip-id': cfg.flipId });
@@ -1529,6 +1667,14 @@
                     closeBtn: document.getElementById('lightboxCloseBtn')
                 }, this.mediaUrlManager);
 
+                this.confirmDialog = new ConfirmDialog({
+                    overlay: document.getElementById('confirmModal'),
+                    content: document.getElementById('confirmModalContent'),
+                    message: document.getElementById('confirmModalMessage'),
+                    cancelBtn: document.getElementById('confirmCancelBtn'),
+                    okBtn: document.getElementById('confirmOkBtn')
+                });
+
                 this.dragDrop = new DragDropController(document.body, (info) => this._handleDrop(info));
 
                 // Evita que soltar un archivo fuera de una zona de arrastre navegue a él en el navegador.
@@ -1597,13 +1743,15 @@
                 document.getElementById('importFile').addEventListener('change', (e) => this._importData(e));
             }
 
-            _confirmAndRun(message, fn) {
-                if (window.confirm(message)) fn();
+            async _confirmAndRun(message, fn, okLabel) {
+                const ok = await this.confirmDialog.ask(message, okLabel);
+                if (ok) fn();
             }
 
-            _confirmDiscardDirtyIfNeeded(proceedFn) {
+            async _confirmDiscardDirtyIfNeeded(proceedFn) {
                 if (this.dirtyPrompts.size === 0) { proceedFn(); return; }
-                if (window.confirm('⚠️ Tienes prompts con cambios sin guardar. ¿Quieres descartarlos?')) {
+                const ok = await this.confirmDialog.ask('Tienes cambios sin guardar en el prompt. ¿Quieres descartarlos?', 'Descartar');
+                if (ok) {
                     this.dirtyPrompts.clear();
                     proceedFn();
                 }
@@ -1793,13 +1941,7 @@
                 nameWrap.appendChild(nameInput);
                 nameWrap.appendChild(this._buildBlockDescriptionArea(block));
 
-                const deleteBtn = el('button', {
-                    type: 'button', class: 'tile-action-btn danger', style: 'width:2.25rem;height:2.25rem;font-size:.9rem;',
-                    'aria-label': 'Eliminar bloque', text: '✕'
-                });
-                deleteBtn.addEventListener('click', () => this._confirmAndRun('⚠️ ¿Eliminar este bloque y todo su contenido?', () => { this.closeDetail(); this.store.deleteBlock(block.id); }));
-
-                headRow.append(emojiBtn, nameWrap, deleteBtn);
+                headRow.append(emojiBtn, nameWrap);
                 container.appendChild(headRow);
 
                 const grid = el('div', {
@@ -1826,36 +1968,33 @@
                 grid.appendChild(createAddPromptTile('Nuevo prompt', () => this._addPrompt(block.id)));
                 container.appendChild(grid);
 
+                const dangerRow = el('div', { class: 'pt-4 mt-2 border-t border-[#1c1c1c] flex justify-start' });
+                const deleteBtn = el('button', { type: 'button', class: 'btn-danger px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wide', text: 'Eliminar bloque' });
+                deleteBtn.addEventListener('click', () => this._confirmAndRun('⚠️ ¿Eliminar este bloque y todo su contenido?', () => { this.closeDetail(); this.store.deleteBlock(block.id); }));
+                dangerRow.appendChild(deleteBtn);
+                container.appendChild(dangerRow);
+
                 return container;
             }
 
             _buildNoteDescriptionArea(note) {
-                const container = el('div', { class: 'mt-1' });
-                const showTextarea = (autofocus) => {
-                    container.innerHTML = '';
-                    const descInput = document.createElement('textarea');
-                    descInput.className = 'detail-desc-input';
-                    descInput.value = note.description || '';
-                    descInput.placeholder = 'Añade una descripción...';
-                    descInput.rows = 3;
-                    descInput.setAttribute('aria-label', 'Descripción de la nota');
-                    descInput.dataset.field = 'description';
-                    descInput.dataset.noteId = note.id;
-                    descInput.addEventListener('blur', async () => {
-                        const val = descInput.value;
-                        await this.store.setNoteDescription(note.id, val);
-                        if (!val.trim()) showLink();
-                    });
-                    container.appendChild(descInput);
-                    if (autofocus) descInput.focus();
+                const container = el('div', { class: 'mt-3' });
+                const descInput = document.createElement('textarea');
+                descInput.className = 'detail-desc-input note-detail-textarea';
+                descInput.value = note.description || '';
+                descInput.placeholder = 'Escribe aquí el contenido de la nota...';
+                descInput.rows = 6;
+                descInput.setAttribute('aria-label', 'Contenido de la nota');
+                descInput.dataset.field = 'description';
+                descInput.dataset.noteId = note.id;
+                const autoResize = () => {
+                    descInput.style.height = 'auto';
+                    descInput.style.height = Math.max(descInput.scrollHeight + 2, 220) + 'px';
                 };
-                const showLink = () => {
-                    container.innerHTML = '';
-                    const btn = el('button', { type: 'button', class: 'add-description-btn', text: '✚ Añadir descripción' });
-                    btn.addEventListener('click', () => showTextarea(true));
-                    container.appendChild(btn);
-                };
-                if (note.description && note.description.trim()) showTextarea(false); else showLink();
+                descInput.addEventListener('input', autoResize);
+                descInput.addEventListener('blur', () => this.store.setNoteDescription(note.id, descInput.value));
+                container.appendChild(descInput);
+                requestAnimationFrame(autoResize);
                 return container;
             }
 
@@ -1884,16 +2023,61 @@
                 nameWrap.appendChild(nameInput);
                 nameWrap.appendChild(this._buildNoteDescriptionArea(note));
 
-                const deleteBtn = el('button', {
-                    type: 'button', class: 'tile-action-btn danger', style: 'width:2.25rem;height:2.25rem;font-size:.9rem;',
-                    'aria-label': 'Eliminar nota', text: '✕'
-                });
-                deleteBtn.addEventListener('click', () => this._confirmAndRun('⚠️ ¿Eliminar esta nota?', () => { this.closeDetail(); this.store.deleteNote(note.id); }));
-
-                headRow.append(emojiBtn, nameWrap, deleteBtn);
+                headRow.append(emojiBtn, nameWrap);
                 container.appendChild(headRow);
 
+                container.appendChild(this._buildNoteMediaSlot(note));
+
+                const dangerRow = el('div', { class: 'pt-4 mt-2 border-t border-[#1c1c1c] flex justify-start' });
+                const deleteBtn = el('button', { type: 'button', class: 'btn-danger px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wide', text: 'Eliminar nota' });
+                deleteBtn.addEventListener('click', () => this._confirmAndRun('⚠️ ¿Eliminar esta nota?', () => { this.closeDetail(); this.store.deleteNote(note.id); }));
+                dangerRow.appendChild(deleteBtn);
+                container.appendChild(dangerRow);
+
                 return container;
+            }
+
+            _buildNoteMediaSlot(note) {
+                const wrap = el('div', { class: 'note-media-attach' });
+                wrap.appendChild(el('span', { class: 'note-media-attach-label', text: 'Adjunto (opcional)' }));
+                if (note.mediaId) {
+                    const preview = el('div', { class: 'note-media-preview' });
+                    let mediaEl;
+                    if (note.mediaType === 'video') {
+                        mediaEl = document.createElement('video');
+                        mediaEl.controls = true;
+                        mediaEl.setAttribute('aria-label', 'Vídeo adjunto de la nota');
+                    } else {
+                        mediaEl = document.createElement('img');
+                        mediaEl.alt = 'Imagen adjunta de la nota';
+                        mediaEl.tabIndex = 0;
+                        mediaEl.style.cursor = 'pointer';
+                        mediaEl.setAttribute('role', 'button');
+                        mediaEl.setAttribute('aria-label', 'Ver imagen a tamaño completo');
+                        mediaEl.addEventListener('click', () => this.lightbox.open(note.mediaId));
+                        mediaEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.lightbox.open(note.mediaId); } });
+                    }
+                    this.mediaUrlManager.getUrl(note.mediaId).then(url => { if (url) mediaEl.src = url; });
+                    const removeBtn = el('button', { type: 'button', class: 'note-media-preview-remove', 'aria-label': 'Eliminar adjunto', text: '✕' });
+                    removeBtn.addEventListener('click', () => this.store.removeNoteMedia(note.id));
+                    preview.append(mediaEl, removeBtn);
+                    wrap.appendChild(preview);
+                } else {
+                    const zone = el('label', { class: 'note-media-dropzone' });
+                    zone.appendChild(el('span', { 'aria-hidden': 'true', text: '+' }));
+                    zone.appendChild(document.createTextNode(' Añade una imagen o vídeo'));
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*,video/*';
+                    input.className = 'hidden';
+                    input.setAttribute('aria-label', 'Añadir imagen o vídeo a la nota');
+                    input.dataset.action = 'add-note-media';
+                    input.dataset.noteId = note.id;
+                    zone.appendChild(input);
+                    wireFileDropzone(zone, (file) => this._handleNoteMediaFile(note.id, file));
+                    wrap.appendChild(zone);
+                }
+                return wrap;
             }
 
             // Devuelve el id de media a usar como portada de la ficha (solo si es una imagen), o null
@@ -2007,16 +2191,70 @@
                 }, 0);
             }
 
+            _toggleMoveBlockPopover(triggerEl, block, prompt) {
+                const existing = document.querySelector('.move-block-popover');
+                if (existing) { existing.remove(); return; }
+
+                const pop = el('div', { class: 'move-block-popover', role: 'dialog', 'aria-label': 'Mover prompt a otro bloque' });
+                const close = () => {
+                    pop.remove();
+                    document.removeEventListener('click', onDocClick, true);
+                    document.removeEventListener('keydown', onKey, true);
+                };
+                pop.appendChild(el('span', { class: 'move-block-label', text: 'Mover a...' }));
+                const others = this.store.blocks.filter(b => b.id !== block.id);
+                if (others.length === 0) {
+                    pop.appendChild(el('span', { class: 'move-block-empty', text: 'No hay otros bloques.' }));
+                } else {
+                    others.forEach(b => {
+                        const opt = el('button', { type: 'button', class: 'move-block-option' });
+                        opt.appendChild(el('span', { class: 'move-block-emoji', 'aria-hidden': 'true', text: b.emoji || BLOCK_DEFAULT_EMOJI }));
+                        opt.appendChild(el('span', { text: b.name || 'Sin nombre' }));
+                        opt.addEventListener('click', async () => {
+                            close();
+                            await this.store.movePromptToBlock(block.id, prompt.id, b.id);
+                            this.openPrompt(b.id, prompt.id);
+                        });
+                        pop.appendChild(opt);
+                    });
+                }
+                document.body.appendChild(pop);
+
+                const r = triggerEl.getBoundingClientRect();
+                const pr = pop.getBoundingClientRect();
+                let top = r.bottom + 6, left = r.left;
+                if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+                if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 6;
+                pop.style.top = top + 'px';
+                pop.style.left = left + 'px';
+
+                const onDocClick = (e) => { if (!pop.contains(e.target) && e.target !== triggerEl) close(); };
+                const onKey = (e) => { if (e.key === 'Escape') { close(); triggerEl.focus(); } };
+                setTimeout(() => {
+                    document.addEventListener('click', onDocClick, true);
+                    document.addEventListener('keydown', onKey, true);
+                }, 0);
+            }
+
             _buildPromptDetail(block, prompt) {
                 const draft = this.dirtyPrompts.get(prompt.id);
                 const isDirty = !!draft;
                 const container = el('div', { class: 'flex flex-col gap-6' });
 
+                const topRow = el('div', { class: 'flex items-center gap-2 flex-wrap' });
                 const backBtn = el('button', {
-                    type: 'button', class: 'btn-dark px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 self-start'
+                    type: 'button', class: 'btn-dark px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5'
                 }, [el('span', { 'aria-hidden': 'true', text: '‹' }), 'Volver al bloque']);
                 backBtn.addEventListener('click', () => this._confirmDiscardDirtyIfNeeded(() => this.backToBlock()));
-                container.appendChild(backBtn);
+                topRow.appendChild(backBtn);
+
+                const moveBtn = el('button', {
+                    type: 'button', class: 'btn-dark px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5'
+                }, [el('span', { 'aria-hidden': 'true', text: '⇄' }), 'Mover a otro bloque']);
+                moveBtn.addEventListener('click', () => this._toggleMoveBlockPopover(moveBtn, block, prompt));
+                topRow.appendChild(moveBtn);
+
+                container.appendChild(topRow);
 
                 const headRow = el('div', { class: 'flex items-start gap-4' });
                 const emojiBtn = el('button', {
@@ -2201,12 +2439,21 @@
             }
 
             _onDetailChange(e) {
-                if (!e.target.matches('[data-action="add-media"]')) return;
-                const input = e.target;
-                const file = input.files[0];
-                if (!file) return;
-                this._handleMediaFile(input.dataset.blockId, input.dataset.promptId, input.dataset.slot, file);
-                input.value = '';
+                if (e.target.matches('[data-action="add-media"]')) {
+                    const input = e.target;
+                    const file = input.files[0];
+                    if (!file) return;
+                    this._handleMediaFile(input.dataset.blockId, input.dataset.promptId, input.dataset.slot, file);
+                    input.value = '';
+                    return;
+                }
+                if (e.target.matches('[data-action="add-note-media"]')) {
+                    const input = e.target;
+                    const file = input.files[0];
+                    if (!file) return;
+                    this._handleNoteMediaFile(input.dataset.noteId, file);
+                    input.value = '';
+                }
             }
 
             async _handleMediaFile(blockId, promptId, slot, file) {
@@ -2220,6 +2467,23 @@
                 }
                 try {
                     await this.store.setMedia(blockId, promptId, slot, file);
+                } catch (err) {
+                    console.error(err);
+                    Toast.show('No se pudo guardar el archivo multimedia.', 'error');
+                }
+            }
+
+            async _handleNoteMediaFile(noteId, file) {
+                if (!/^image\/|^video\//.test(file.type)) {
+                    Toast.show('Formato no soportado. Usa una imagen o un vídeo.', 'error');
+                    return;
+                }
+                if (file.size > 60 * 1024 * 1024) {
+                    Toast.show('Archivo demasiado grande (máx. 60MB).', 'error');
+                    return;
+                }
+                try {
+                    await this.store.setNoteMedia(noteId, file);
                 } catch (err) {
                     console.error(err);
                     Toast.show('No se pudo guardar el archivo multimedia.', 'error');
