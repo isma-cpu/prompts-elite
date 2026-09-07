@@ -238,6 +238,10 @@
         .prompt-dirty-label { font-size: .62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #eab308; display: flex; align-items: center; gap: .3rem; }
 
         /* Selector de portada (emoji / imagen "Después" / personalizada) */
+        .cover-popover {
+            position: fixed; z-index: 600; background: #0a0a0a; border: 1px solid rgba(234,179,8,.45); border-radius: .9rem;
+            padding: .8rem; box-shadow: 0 20px 60px rgba(0,0,0,.9), 0 0 34px rgba(234,179,8,.18); max-width: 20rem;
+        }
         .cover-picker { display: flex; flex-direction: column; gap: .5rem; }
         .cover-picker-label { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a8a8a; }
         .cover-options { display: flex; gap: .6rem; flex-wrap: wrap; }
@@ -1901,11 +1905,12 @@
                 return null;
             }
 
-            _buildCoverPicker(block, prompt) {
+            _buildCoverPicker(block, prompt, onAction) {
                 const wrap = el('div', { class: 'cover-picker' });
                 wrap.appendChild(el('span', { class: 'cover-picker-label', text: 'Portada de la ficha' }));
                 const options = el('div', { class: 'cover-options' });
                 const mode = prompt.coverMode || 'emoji';
+                const run = (fn) => { fn(); if (onAction) onAction(); };
 
                 const emojiOpt = el('button', {
                     type: 'button', class: 'cover-option' + (mode === 'emoji' ? ' selected' : ''),
@@ -1913,7 +1918,7 @@
                 });
                 emojiOpt.appendChild(el('span', { class: 'cover-option-emoji', 'aria-hidden': 'true', text: prompt.emoji || PROMPT_DEFAULT_EMOJI }));
                 emojiOpt.appendChild(el('span', { class: 'cover-option-label', text: 'Emoji' }));
-                emojiOpt.addEventListener('click', () => this.store.setPromptCoverMode(block.id, prompt.id, 'emoji'));
+                emojiOpt.addEventListener('click', () => run(() => this.store.setPromptCoverMode(block.id, prompt.id, 'emoji')));
                 options.appendChild(emojiOpt);
 
                 const hasAfterImage = !!(prompt.mediaAfterId && prompt.mediaAfterType === 'image');
@@ -1927,7 +1932,7 @@
                     img.alt = '';
                     this.mediaUrlManager.getUrl(prompt.mediaAfterId).then(url => { if (url) img.src = url; });
                     afterOpt.appendChild(img);
-                    afterOpt.addEventListener('click', () => this.store.setPromptCoverMode(block.id, prompt.id, 'after'));
+                    afterOpt.addEventListener('click', () => run(() => this.store.setPromptCoverMode(block.id, prompt.id, 'after')));
                 } else {
                     afterOpt.appendChild(el('span', { class: 'cover-option-emoji', 'aria-hidden': 'true', text: '🖼️' }));
                 }
@@ -1946,9 +1951,9 @@
                     this.mediaUrlManager.getUrl(prompt.coverMediaId).then(url => { if (url) img.src = url; });
                     customOpt.appendChild(img);
                     const removeBtn = el('button', { type: 'button', class: 'cover-option-remove', 'aria-label': 'Eliminar portada personalizada', text: '✕' });
-                    removeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.store.removePromptCoverMedia(block.id, prompt.id); });
+                    removeBtn.addEventListener('click', (e) => { e.stopPropagation(); run(() => this.store.removePromptCoverMedia(block.id, prompt.id)); });
                     customOpt.appendChild(removeBtn);
-                    customOpt.addEventListener('click', () => this.store.setPromptCoverMode(block.id, prompt.id, 'custom'));
+                    customOpt.addEventListener('click', () => run(() => this.store.setPromptCoverMode(block.id, prompt.id, 'custom')));
                 } else {
                     customOpt.appendChild(el('span', { class: 'cover-option-emoji', 'aria-hidden': 'true', text: '+' }));
                 }
@@ -1958,16 +1963,48 @@
                 coverInput.accept = 'image/*';
                 coverInput.className = 'hidden';
                 coverInput.setAttribute('aria-label', 'Subir portada personalizada');
-                coverInput.dataset.action = 'add-cover-media';
-                coverInput.dataset.blockId = block.id;
-                coverInput.dataset.promptId = prompt.id;
+                coverInput.addEventListener('click', (e) => e.stopPropagation());
+                coverInput.addEventListener('change', () => {
+                    const file = coverInput.files[0];
+                    coverInput.value = '';
+                    if (file) run(() => this._handleCoverFile(block.id, prompt.id, file));
+                });
                 customOpt.appendChild(coverInput);
                 if (!hasCustom) customOpt.addEventListener('click', () => coverInput.click());
-                wireFileDropzone(customOpt, (file) => this._handleCoverFile(block.id, prompt.id, file));
+                wireFileDropzone(customOpt, (file) => run(() => this._handleCoverFile(block.id, prompt.id, file)));
                 options.appendChild(customOpt);
 
                 wrap.appendChild(options);
                 return wrap;
+            }
+
+            _toggleCoverPopover(triggerEl, block, prompt) {
+                const existing = document.querySelector('.cover-popover');
+                if (existing) { existing.remove(); return; }
+
+                const pop = el('div', { class: 'cover-popover', role: 'dialog', 'aria-label': 'Elegir portada de la ficha' });
+                const close = () => {
+                    pop.remove();
+                    document.removeEventListener('click', onDocClick, true);
+                    document.removeEventListener('keydown', onKey, true);
+                };
+                pop.appendChild(this._buildCoverPicker(block, prompt, close));
+                document.body.appendChild(pop);
+
+                const r = triggerEl.getBoundingClientRect();
+                const pr = pop.getBoundingClientRect();
+                let top = r.bottom + 6, left = r.right - pr.width;
+                if (left < 8) left = 8;
+                if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 6;
+                pop.style.top = top + 'px';
+                pop.style.left = left + 'px';
+
+                const onDocClick = (e) => { if (!pop.contains(e.target) && e.target !== triggerEl) close(); };
+                const onKey = (e) => { if (e.key === 'Escape') { close(); triggerEl.focus(); } };
+                setTimeout(() => {
+                    document.addEventListener('click', onDocClick, true);
+                    document.addEventListener('keydown', onKey, true);
+                }, 0);
             }
 
             _buildPromptDetail(block, prompt) {
@@ -2001,10 +2038,14 @@
                 const titleWrap = el('div', { class: 'flex-1 min-w-0' });
                 titleWrap.appendChild(titleInput);
 
-                headRow.append(emojiBtn, titleWrap);
-                container.appendChild(headRow);
+                const coverBtn = el('button', {
+                    type: 'button', class: 'emoji-trigger', style: 'width:2.9rem;height:2.9rem;font-size:1.3rem;',
+                    'aria-label': 'Elegir portada de la ficha', title: 'Portada', text: '🖼️'
+                });
+                coverBtn.addEventListener('click', () => this._toggleCoverPopover(coverBtn, block, prompt));
 
-                container.appendChild(this._buildCoverPicker(block, prompt));
+                headRow.append(emojiBtn, titleWrap, coverBtn);
+                container.appendChild(headRow);
 
                 const textarea = document.createElement('textarea');
                 textarea.className = 'w-full bg-transparent text-gray-200 text-sm outline-none resize-none border border-[#222] focus:border-yellow-500 rounded-lg p-4 transition-colors';
@@ -2160,19 +2201,12 @@
             }
 
             _onDetailChange(e) {
-                if (e.target.matches('[data-action="add-media"]')) {
-                    const input = e.target;
-                    const file = input.files[0];
-                    if (!file) return;
-                    this._handleMediaFile(input.dataset.blockId, input.dataset.promptId, input.dataset.slot, file);
-                    input.value = '';
-                } else if (e.target.matches('[data-action="add-cover-media"]')) {
-                    const input = e.target;
-                    const file = input.files[0];
-                    if (!file) return;
-                    this._handleCoverFile(input.dataset.blockId, input.dataset.promptId, file);
-                    input.value = '';
-                }
+                if (!e.target.matches('[data-action="add-media"]')) return;
+                const input = e.target;
+                const file = input.files[0];
+                if (!file) return;
+                this._handleMediaFile(input.dataset.blockId, input.dataset.promptId, input.dataset.slot, file);
+                input.value = '';
             }
 
             async _handleMediaFile(blockId, promptId, slot, file) {
