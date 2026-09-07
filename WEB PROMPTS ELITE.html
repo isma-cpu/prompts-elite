@@ -225,7 +225,40 @@
         .prompt-tile-add .prompt-tile-emoji { filter: none; opacity: .5; }
         .prompt-tile-add:hover .prompt-tile-emoji { opacity: 1; }
 
+        /* Portada con imagen en vez de emoji */
+        .prompt-tile.has-cover { padding: 0; overflow: hidden; justify-content: flex-end; align-items: stretch; }
+        .prompt-tile-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .prompt-tile-cover-overlay {
+            position: relative; z-index: 1; width: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.55) 55%, transparent 100%);
+            padding: 1.2rem .5rem .45rem;
+        }
+        .prompt-tile.has-cover .prompt-tile-title { -webkit-line-clamp: 2; }
+
         .prompt-dirty-label { font-size: .62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #eab308; display: flex; align-items: center; gap: .3rem; }
+
+        /* Selector de portada (emoji / imagen "Después" / personalizada) */
+        .cover-picker { display: flex; flex-direction: column; gap: .5rem; }
+        .cover-picker-label { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #8a8a8a; }
+        .cover-options { display: flex; gap: .6rem; flex-wrap: wrap; }
+        .cover-option {
+            position: relative; width: 64px; height: 64px; border-radius: .6rem; border: 2px solid #242424; background: #111;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; transition: all .2s;
+        }
+        .cover-option:hover:not(.disabled) { border-color: #666; }
+        .cover-option.selected { border-color: #eab308; box-shadow: 0 0 12px rgba(234,179,8,.4); }
+        .cover-option.disabled { opacity: .35; cursor: not-allowed; }
+        .cover-option.dropzone-active { border-color: #eab308; box-shadow: 0 0 14px rgba(234,179,8,.5); }
+        .cover-option img { width: 100%; height: 100%; object-fit: cover; }
+        .cover-option-emoji { font-size: 1.5rem; }
+        .cover-option-label {
+            position: absolute; bottom: 0; left: 0; right: 0; font-size: .5rem; text-align: center;
+            background: rgba(0,0,0,.7); color: #ccc; padding: .12rem 0; text-transform: uppercase; letter-spacing: .05em;
+        }
+        .cover-option-remove {
+            position: absolute; top: .15rem; right: .15rem; width: 1rem; height: 1rem; border-radius: 50%;
+            background: rgba(220,38,38,.9); color: #fff; font-size: .55rem; display: flex; align-items: center; justify-content: center; z-index: 2;
+        }
 
         /* Slots de imagen/vídeo antes-después */
         .media-slots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
@@ -564,7 +597,9 @@
                 text: Sanitizer.cleanText(rawPrompt.text || '', 20000),
                 description: Sanitizer.cleanText(rawPrompt.description || '', 300),
                 mediaBeforeId: null, mediaBeforeType: null,
-                mediaAfterId: null, mediaAfterType: null
+                mediaAfterId: null, mediaAfterType: null,
+                coverMode: (rawPrompt.coverMode === 'after' || rawPrompt.coverMode === 'custom') ? rawPrompt.coverMode : 'emoji',
+                coverMediaId: null, coverMediaType: null
             };
             if (rawPrompt.mediaBefore || rawPrompt.mediaAfter) {
                 if (rawPrompt.mediaBefore) {
@@ -579,6 +614,13 @@
                 // Backup antiguo con un único archivo: se coloca en la casilla "Antes".
                 const r = await convertMediaDataUrl(rawPrompt.media, db);
                 if (r) { newPrompt.mediaBeforeId = r.id; newPrompt.mediaBeforeType = r.type; }
+            }
+            if (rawPrompt.coverImage) {
+                const r = await convertMediaDataUrl(rawPrompt.coverImage, db);
+                if (r) { newPrompt.coverMediaId = r.id; newPrompt.coverMediaType = r.type; }
+                else newPrompt.coverMode = 'emoji';
+            } else if (newPrompt.coverMode === 'custom') {
+                newPrompt.coverMode = 'emoji';
             }
             return newPrompt;
         }
@@ -635,13 +677,15 @@
                 return {
                     id: p.id || uid(), title: p.title || '', emoji: p.emoji || '', text: p.text || '', description: p.description || '',
                     mediaBeforeId: p.mediaBeforeId || null, mediaBeforeType: p.mediaBeforeType || null,
-                    mediaAfterId: p.mediaAfterId || null, mediaAfterType: p.mediaAfterType || null
+                    mediaAfterId: p.mediaAfterId || null, mediaAfterType: p.mediaAfterType || null,
+                    coverMode: p.coverMode || 'emoji', coverMediaId: p.coverMediaId || null, coverMediaType: p.coverMediaType || null
                 };
             }
             return {
                 id: p.id || uid(), title: p.title || '', emoji: p.emoji || '', text: p.text || '', description: p.description || '',
                 mediaBeforeId: p.mediaId || null, mediaBeforeType: p.mediaType || null,
-                mediaAfterId: null, mediaAfterType: null
+                mediaAfterId: null, mediaAfterType: null,
+                coverMode: 'emoji', coverMediaId: null, coverMediaType: null
             };
         }
 
@@ -712,9 +756,43 @@
                 const block = this.findBlock(blockId);
                 if (!block) return null;
                 const id = uid();
-                block.prompts.push({ id, title: '', emoji: '', text: '', description: '', mediaBeforeId: null, mediaBeforeType: null, mediaAfterId: null, mediaAfterType: null });
+                block.prompts.push({
+                    id, title: '', emoji: '', text: '', description: '',
+                    mediaBeforeId: null, mediaBeforeType: null, mediaAfterId: null, mediaAfterType: null,
+                    coverMode: 'emoji', coverMediaId: null, coverMediaType: null
+                });
                 await this.persist(); this._emit();
                 return id;
+            }
+
+            // "emoji" (por defecto), "after" (usa la imagen "Después") o "custom" (una foto propia).
+            async setPromptCoverMode(blockId, promptId, mode) {
+                const prompt = this.findPrompt(blockId, promptId);
+                if (!prompt) return;
+                prompt.coverMode = mode;
+                await this.persist(); this._emit();
+            }
+
+            async setPromptCoverMedia(blockId, promptId, file) {
+                const prompt = this.findPrompt(blockId, promptId);
+                if (!prompt) return;
+                if (prompt.coverMediaId) { this.mediaUrlManager.revoke(prompt.coverMediaId); await this.db.deleteMedia(prompt.coverMediaId); }
+                const mediaId = uid();
+                await this.db.putMedia(mediaId, file, file.type);
+                prompt.coverMediaId = mediaId;
+                prompt.coverMediaType = file.type.startsWith('video') ? 'video' : 'image';
+                prompt.coverMode = 'custom';
+                await this.persist(); this._emit();
+            }
+
+            async removePromptCoverMedia(blockId, promptId) {
+                const prompt = this.findPrompt(blockId, promptId);
+                if (!prompt || !prompt.coverMediaId) return;
+                this.mediaUrlManager.revoke(prompt.coverMediaId);
+                await this.db.deleteMedia(prompt.coverMediaId);
+                prompt.coverMediaId = null; prompt.coverMediaType = null;
+                if (prompt.coverMode === 'custom') prompt.coverMode = 'emoji';
+                await this.persist(); this._emit();
             }
 
             // A diferencia de los demás campos, el contenido del prompt (título + texto + descripción)
@@ -760,6 +838,7 @@
             async _releaseMediaForPrompt(prompt) {
                 if (prompt.mediaBeforeId) { this.mediaUrlManager.revoke(prompt.mediaBeforeId); await this.db.deleteMedia(prompt.mediaBeforeId); }
                 if (prompt.mediaAfterId) { this.mediaUrlManager.revoke(prompt.mediaAfterId); await this.db.deleteMedia(prompt.mediaAfterId); }
+                if (prompt.coverMediaId) { this.mediaUrlManager.revoke(prompt.coverMediaId); await this.db.deleteMedia(prompt.coverMediaId); }
             }
 
             async _releaseMediaForBlock(block) {
@@ -901,10 +980,14 @@
                 for (const block of this.blocks) {
                     const b = { name: block.name, emoji: block.emoji || '', description: block.description || '', prompts: [] };
                     for (const prompt of block.prompts) {
-                        let mediaBefore = null, mediaAfter = null;
+                        let mediaBefore = null, mediaAfter = null, coverImage = null;
                         if (prompt.mediaBeforeId) { const rec = await this.db.getMedia(prompt.mediaBeforeId); if (rec) mediaBefore = await blobToDataURL(rec.blob); }
                         if (prompt.mediaAfterId) { const rec = await this.db.getMedia(prompt.mediaAfterId); if (rec) mediaAfter = await blobToDataURL(rec.blob); }
-                        b.prompts.push({ title: prompt.title || '', emoji: prompt.emoji || '', text: prompt.text, description: prompt.description || '', mediaBefore, mediaAfter });
+                        if (prompt.coverMediaId) { const rec = await this.db.getMedia(prompt.coverMediaId); if (rec) coverImage = await blobToDataURL(rec.blob); }
+                        b.prompts.push({
+                            title: prompt.title || '', emoji: prompt.emoji || '', text: prompt.text, description: prompt.description || '',
+                            mediaBefore, mediaAfter, coverMode: prompt.coverMode || 'emoji', coverImage
+                        });
                     }
                     blocksOut.push(b);
                 }
@@ -1282,10 +1365,24 @@
             delBtn.addEventListener('click', (e) => { e.stopPropagation(); cfg.onDelete(); });
             actions.append(handle, upBtn, downBtn, delBtn);
 
-            const openBtn = el('button', { type: 'button', class: 'prompt-tile' + (cfg.dirty ? ' dirty' : ''), role: 'listitem', 'aria-label': cfg.ariaLabel });
-            openBtn.appendChild(el('span', { class: 'prompt-tile-emoji', 'aria-hidden': 'true', text: cfg.emoji || PROMPT_DEFAULT_EMOJI }));
-            openBtn.appendChild(el('span', { class: 'prompt-tile-title' + (cfg.title ? '' : ' is-placeholder'), text: cfg.title || 'Prompt sin título' }));
-            if (cfg.description) openBtn.appendChild(el('span', { class: 'prompt-tile-desc', text: cfg.description }));
+            const hasCover = !!cfg.coverMediaId;
+            const openBtn = el('button', {
+                type: 'button', class: 'prompt-tile' + (cfg.dirty ? ' dirty' : '') + (hasCover ? ' has-cover' : ''),
+                role: 'listitem', 'aria-label': cfg.ariaLabel
+            });
+            if (hasCover) {
+                const img = document.createElement('img');
+                img.className = 'prompt-tile-cover-img';
+                img.alt = '';
+                cfg.mediaUrlManager.getUrl(cfg.coverMediaId).then(url => { if (url) img.src = url; });
+                const overlay = el('div', { class: 'prompt-tile-cover-overlay' });
+                overlay.appendChild(el('span', { class: 'prompt-tile-title' + (cfg.title ? '' : ' is-placeholder'), text: cfg.title || 'Prompt sin título' }));
+                openBtn.append(img, overlay);
+            } else {
+                openBtn.appendChild(el('span', { class: 'prompt-tile-emoji', 'aria-hidden': 'true', text: cfg.emoji || PROMPT_DEFAULT_EMOJI }));
+                openBtn.appendChild(el('span', { class: 'prompt-tile-title' + (cfg.title ? '' : ' is-placeholder'), text: cfg.title || 'Prompt sin título' }));
+                if (cfg.description) openBtn.appendChild(el('span', { class: 'prompt-tile-desc', text: cfg.description }));
+            }
             openBtn.addEventListener('click', cfg.onOpen);
 
             const copyBtn = el('button', { type: 'button', class: 'prompt-tile-copy', 'aria-label': cfg.copyLabel, title: 'Copiar prompt', text: 'Copiar' });
@@ -1708,6 +1805,7 @@
                 block.prompts.forEach((prompt, idx) => {
                     grid.appendChild(createPromptTile({
                         emoji: prompt.emoji, title: prompt.title, description: prompt.description,
+                        coverMediaId: this._resolvePromptCoverMediaId(prompt), mediaUrlManager: this.mediaUrlManager,
                         dragId: prompt.id, flipId: 'prompt-' + prompt.id,
                         dirty: this.dirtyPrompts.has(prompt.id),
                         ariaLabel: 'Abrir prompt ' + (prompt.title || (idx + 1)),
@@ -1794,6 +1892,84 @@
                 return container;
             }
 
+            // Devuelve el id de media a usar como portada de la ficha (solo si es una imagen), o null
+            // si debe mostrarse el emoji. Los vídeos nunca se usan como portada de la ficha cuadrada.
+            _resolvePromptCoverMediaId(prompt) {
+                const mode = prompt.coverMode || 'emoji';
+                if (mode === 'after' && prompt.mediaAfterId && prompt.mediaAfterType === 'image') return prompt.mediaAfterId;
+                if (mode === 'custom' && prompt.coverMediaId && prompt.coverMediaType === 'image') return prompt.coverMediaId;
+                return null;
+            }
+
+            _buildCoverPicker(block, prompt) {
+                const wrap = el('div', { class: 'cover-picker' });
+                wrap.appendChild(el('span', { class: 'cover-picker-label', text: 'Portada de la ficha' }));
+                const options = el('div', { class: 'cover-options' });
+                const mode = prompt.coverMode || 'emoji';
+
+                const emojiOpt = el('button', {
+                    type: 'button', class: 'cover-option' + (mode === 'emoji' ? ' selected' : ''),
+                    'aria-label': 'Usar el emoji como portada', title: 'Emoji'
+                });
+                emojiOpt.appendChild(el('span', { class: 'cover-option-emoji', 'aria-hidden': 'true', text: prompt.emoji || PROMPT_DEFAULT_EMOJI }));
+                emojiOpt.appendChild(el('span', { class: 'cover-option-label', text: 'Emoji' }));
+                emojiOpt.addEventListener('click', () => this.store.setPromptCoverMode(block.id, prompt.id, 'emoji'));
+                options.appendChild(emojiOpt);
+
+                const hasAfterImage = !!(prompt.mediaAfterId && prompt.mediaAfterType === 'image');
+                const afterOpt = el('button', {
+                    type: 'button', class: 'cover-option' + (mode === 'after' ? ' selected' : '') + (hasAfterImage ? '' : ' disabled'),
+                    'aria-label': 'Usar la imagen "Después" como portada',
+                    title: hasAfterImage ? 'Imagen "Después"' : 'Añade primero una imagen en "Después"'
+                });
+                if (hasAfterImage) {
+                    const img = document.createElement('img');
+                    img.alt = '';
+                    this.mediaUrlManager.getUrl(prompt.mediaAfterId).then(url => { if (url) img.src = url; });
+                    afterOpt.appendChild(img);
+                    afterOpt.addEventListener('click', () => this.store.setPromptCoverMode(block.id, prompt.id, 'after'));
+                } else {
+                    afterOpt.appendChild(el('span', { class: 'cover-option-emoji', 'aria-hidden': 'true', text: '🖼️' }));
+                }
+                afterOpt.appendChild(el('span', { class: 'cover-option-label', text: 'Después' }));
+                options.appendChild(afterOpt);
+
+                const hasCustom = !!prompt.coverMediaId;
+                const customOpt = el('button', {
+                    type: 'button', class: 'cover-option' + (mode === 'custom' ? ' selected' : ''),
+                    'aria-label': hasCustom ? 'Usar la portada personalizada' : 'Subir o arrastrar una portada personalizada',
+                    title: 'Personalizada'
+                });
+                if (hasCustom) {
+                    const img = document.createElement('img');
+                    img.alt = '';
+                    this.mediaUrlManager.getUrl(prompt.coverMediaId).then(url => { if (url) img.src = url; });
+                    customOpt.appendChild(img);
+                    const removeBtn = el('button', { type: 'button', class: 'cover-option-remove', 'aria-label': 'Eliminar portada personalizada', text: '✕' });
+                    removeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.store.removePromptCoverMedia(block.id, prompt.id); });
+                    customOpt.appendChild(removeBtn);
+                    customOpt.addEventListener('click', () => this.store.setPromptCoverMode(block.id, prompt.id, 'custom'));
+                } else {
+                    customOpt.appendChild(el('span', { class: 'cover-option-emoji', 'aria-hidden': 'true', text: '+' }));
+                }
+                customOpt.appendChild(el('span', { class: 'cover-option-label', text: hasCustom ? 'Personal' : 'Subir' }));
+                const coverInput = document.createElement('input');
+                coverInput.type = 'file';
+                coverInput.accept = 'image/*';
+                coverInput.className = 'hidden';
+                coverInput.setAttribute('aria-label', 'Subir portada personalizada');
+                coverInput.dataset.action = 'add-cover-media';
+                coverInput.dataset.blockId = block.id;
+                coverInput.dataset.promptId = prompt.id;
+                customOpt.appendChild(coverInput);
+                if (!hasCustom) customOpt.addEventListener('click', () => coverInput.click());
+                wireFileDropzone(customOpt, (file) => this._handleCoverFile(block.id, prompt.id, file));
+                options.appendChild(customOpt);
+
+                wrap.appendChild(options);
+                return wrap;
+            }
+
             _buildPromptDetail(block, prompt) {
                 const draft = this.dirtyPrompts.get(prompt.id);
                 const isDirty = !!draft;
@@ -1827,6 +2003,8 @@
 
                 headRow.append(emojiBtn, titleWrap);
                 container.appendChild(headRow);
+
+                container.appendChild(this._buildCoverPicker(block, prompt));
 
                 const textarea = document.createElement('textarea');
                 textarea.className = 'w-full bg-transparent text-gray-200 text-sm outline-none resize-none border border-[#222] focus:border-yellow-500 rounded-lg p-4 transition-colors';
@@ -1982,12 +2160,19 @@
             }
 
             _onDetailChange(e) {
-                if (!e.target.matches('[data-action="add-media"]')) return;
-                const input = e.target;
-                const file = input.files[0];
-                if (!file) return;
-                this._handleMediaFile(input.dataset.blockId, input.dataset.promptId, input.dataset.slot, file);
-                input.value = '';
+                if (e.target.matches('[data-action="add-media"]')) {
+                    const input = e.target;
+                    const file = input.files[0];
+                    if (!file) return;
+                    this._handleMediaFile(input.dataset.blockId, input.dataset.promptId, input.dataset.slot, file);
+                    input.value = '';
+                } else if (e.target.matches('[data-action="add-cover-media"]')) {
+                    const input = e.target;
+                    const file = input.files[0];
+                    if (!file) return;
+                    this._handleCoverFile(input.dataset.blockId, input.dataset.promptId, file);
+                    input.value = '';
+                }
             }
 
             async _handleMediaFile(blockId, promptId, slot, file) {
@@ -2004,6 +2189,23 @@
                 } catch (err) {
                     console.error(err);
                     Toast.show('No se pudo guardar el archivo multimedia.', 'error');
+                }
+            }
+
+            async _handleCoverFile(blockId, promptId, file) {
+                if (!file.type.startsWith('image/')) {
+                    Toast.show('La portada debe ser una imagen.', 'error');
+                    return;
+                }
+                if (file.size > 60 * 1024 * 1024) {
+                    Toast.show('Archivo demasiado grande (máx. 60MB).', 'error');
+                    return;
+                }
+                try {
+                    await this.store.setPromptCoverMedia(blockId, promptId, file);
+                } catch (err) {
+                    console.error(err);
+                    Toast.show('No se pudo guardar la portada.', 'error');
                 }
             }
 
