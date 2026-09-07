@@ -63,6 +63,12 @@
         }
         .btn-dark:disabled { opacity: 0.25; cursor: not-allowed; }
 
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 55%, #b91c1c 100%);
+            color: #fff; font-weight: 800; border: none; transition: all 0.2s ease;
+        }
+        .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(220,38,38,.45); }
+
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #020202; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
@@ -1793,6 +1799,12 @@
                 const isDirty = !!draft;
                 const container = el('div', { class: 'flex flex-col gap-6' });
 
+                const backBtn = el('button', {
+                    type: 'button', class: 'btn-dark px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 self-start'
+                }, [el('span', { 'aria-hidden': 'true', text: '‹' }), 'Volver al bloque']);
+                backBtn.addEventListener('click', () => this._confirmDiscardDirtyIfNeeded(() => this.backToBlock()));
+                container.appendChild(backBtn);
+
                 const headRow = el('div', { class: 'flex items-start gap-4' });
                 const emojiBtn = el('button', {
                     type: 'button', class: 'emoji-trigger', 'aria-label': 'Cambiar emoji del prompt', text: prompt.emoji || PROMPT_DEFAULT_EMOJI,
@@ -1813,17 +1825,7 @@
                 const titleWrap = el('div', { class: 'flex-1 min-w-0' });
                 titleWrap.appendChild(titleInput);
 
-                const deleteBtn = el('button', {
-                    type: 'button', class: 'tile-action-btn danger', style: 'width:2.25rem;height:2.25rem;font-size:.9rem;',
-                    'aria-label': 'Eliminar prompt', text: '✕'
-                });
-                deleteBtn.addEventListener('click', () => this._confirmAndRun('⚠️ ¿Eliminar este prompt?', () => {
-                    this.dirtyPrompts.delete(prompt.id);
-                    this.backToBlock();
-                    this.store.deletePrompt(block.id, prompt.id);
-                }));
-
-                headRow.append(emojiBtn, titleWrap, deleteBtn);
+                headRow.append(emojiBtn, titleWrap);
                 container.appendChild(headRow);
 
                 const textarea = document.createElement('textarea');
@@ -1889,6 +1891,16 @@
                 mediaGrid.appendChild(this._buildMediaSlot(block, prompt, 'before', 'Antes'));
                 mediaGrid.appendChild(this._buildMediaSlot(block, prompt, 'after', 'Después'));
                 container.appendChild(mediaGrid);
+
+                const dangerRow = el('div', { class: 'pt-4 mt-2 border-t border-[#1c1c1c] flex justify-start' });
+                const deleteBtn = el('button', { type: 'button', class: 'btn-danger px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wide', text: 'Eliminar' });
+                deleteBtn.addEventListener('click', () => this._confirmAndRun('⚠️ ¿Eliminar este prompt?', () => {
+                    this.dirtyPrompts.delete(prompt.id);
+                    this.backToBlock();
+                    this.store.deletePrompt(block.id, prompt.id);
+                }));
+                dangerRow.appendChild(deleteBtn);
+                container.appendChild(dangerRow);
 
                 return container;
             }
