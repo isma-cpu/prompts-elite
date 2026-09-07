@@ -246,14 +246,16 @@
         .prompt-tile-add:hover .prompt-tile-emoji { opacity: 1; }
 
         /* Portada con imagen en vez de emoji */
-        .prompt-tile.has-cover { padding: 0; overflow: hidden; justify-content: flex-end; align-items: stretch; }
+        .prompt-tile.has-cover { padding: 0; overflow: hidden; }
         .prompt-tile-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
         .prompt-tile-cover-overlay {
-            position: relative; z-index: 1; width: 100%;
-            background: linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.55) 55%, transparent 100%);
-            padding: 1.2rem .5rem .45rem;
+            position: absolute; top: 0; left: 0; right: 0; z-index: 1;
+            background: linear-gradient(to bottom, rgba(0,0,0,.92) 0%, rgba(0,0,0,.72) 55%, rgba(0,0,0,.15) 88%, transparent 100%);
+            padding: 1.9rem .55rem 1.1rem;
         }
-        .prompt-tile.has-cover .prompt-tile-title { -webkit-line-clamp: 2; }
+        .prompt-tile.has-cover .prompt-tile-title {
+            -webkit-line-clamp: 3; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 10px rgba(0,0,0,.7);
+        }
 
         .prompt-dirty-label { font-size: .62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #eab308; display: flex; align-items: center; gap: .3rem; }
 
