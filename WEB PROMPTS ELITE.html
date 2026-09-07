@@ -245,14 +245,15 @@
         .prompt-tile-add .prompt-tile-emoji { filter: none; opacity: .5; }
         .prompt-tile-add:hover .prompt-tile-emoji { opacity: 1; }
 
-        /* Portada con imagen en vez de emoji */
+        /* Portada con imagen en vez de emoji: mismo centrado que las fichas sin foto (emoji + título en medio) */
         .prompt-tile.has-cover { padding: 0; overflow: hidden; }
         .prompt-tile-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
         .prompt-tile-cover-overlay {
-            position: absolute; top: 0; left: 0; right: 0; z-index: 1;
-            background: linear-gradient(to bottom, rgba(0,0,0,.92) 0%, rgba(0,0,0,.72) 55%, rgba(0,0,0,.15) 88%, transparent 100%);
-            padding: 1.9rem .55rem 1.1rem;
+            position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: .35rem; text-align: center; padding: .9rem .7rem 2.3rem;
+            background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,.4) 45%, rgba(0,0,0,.65) 100%);
         }
+        .prompt-tile.has-cover .prompt-tile-emoji { filter: drop-shadow(0 2px 6px rgba(0,0,0,.9)); }
         .prompt-tile.has-cover .prompt-tile-title {
             -webkit-line-clamp: 3; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 10px rgba(0,0,0,.7);
         }
@@ -1520,6 +1521,7 @@
                 img.alt = '';
                 cfg.mediaUrlManager.getUrl(cfg.coverMediaId).then(url => { if (url) img.src = url; });
                 const overlay = el('div', { class: 'prompt-tile-cover-overlay' });
+                overlay.appendChild(el('span', { class: 'prompt-tile-emoji', 'aria-hidden': 'true', text: cfg.emoji || PROMPT_DEFAULT_EMOJI }));
                 overlay.appendChild(el('span', { class: 'prompt-tile-title' + (cfg.title ? '' : ' is-placeholder'), text: cfg.title || 'Prompt sin título' }));
                 openBtn.append(img, overlay);
             } else {
