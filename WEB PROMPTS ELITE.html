@@ -2560,20 +2560,25 @@
                 }
             }
 
-            async _exportData() {
+            async _exportData(opts) {
+                const silent = opts && opts.silent;
+                const namePrefix = (opts && opts.namePrefix) || 'Elite_Prompts_Backup_';
                 try {
                     const snapshot = await this.store.exportSnapshot();
                     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'Elite_Prompts_Backup_' + new Date().toISOString().split('T')[0] + '.json';
+                    const stamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+                    a.download = namePrefix + stamp + '.json';
                     a.click();
                     URL.revokeObjectURL(url);
-                    Toast.show('Backup exportado correctamente.');
+                    if (!silent) Toast.show('Backup exportado correctamente.');
+                    return true;
                 } catch (err) {
                     console.error(err);
                     Toast.show('Error al generar el backup.', 'error');
+                    return false;
                 }
             }
 
@@ -2582,18 +2587,32 @@
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = async (event) => {
+                    let data;
                     try {
-                        const data = JSON.parse(event.target.result);
+                        data = JSON.parse(event.target.result);
+                    } catch (err) {
+                        console.error(err);
+                        Toast.show('Error crítico leyendo el paquete de datos.', 'error');
+                        e.target.value = '';
+                        return;
+                    }
+                    const ok = await this.confirmDialog.ask(
+                        '⚠️ Importar reemplaza TODO tu contenido actual (bloques, prompts y notas) por el del archivo — no se combina, se sustituye. Antes de continuar se descargará automáticamente una copia de seguridad de lo que tienes ahora, por si acaso.',
+                        'Reemplazar todo'
+                    );
+                    if (!ok) { e.target.value = ''; return; }
+                    await this._exportData({ silent: true, namePrefix: 'Elite_Prompts_AutoBackup_antes_de_importar_' });
+                    try {
                         await this.store.importData(data);
                         Toast.show('Datos importados correctamente.');
                     } catch (err) {
                         console.error(err);
-                        Toast.show('Error crítico leyendo el paquete de datos.', 'error');
+                        Toast.show('Error crítico importando los datos.', 'error');
                     }
+                    e.target.value = '';
                 };
                 reader.onerror = () => Toast.show('No se pudo leer el archivo.', 'error');
                 reader.readAsText(file);
-                e.target.value = '';
             }
         }
 
